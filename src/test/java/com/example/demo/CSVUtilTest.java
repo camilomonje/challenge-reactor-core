@@ -63,6 +63,50 @@ public class CSVUtilTest {
         assert listFilter.block().size() == 322;
     }
 
+    @Test
+    void reactive_filtrarJugadoresMayoresA34() {
+        List<Player> list = CsvUtilFile.getPlayers();
+        Flux<Player> listFlux = Flux.fromStream(list.parallelStream())
+                .cache();
+        Mono<Map<String, Collection<Player>>> listFilter = listFlux
+                .filter(player -> player.age >= 34)
+                .filter(player -> player.club.equals("Juventus"))
+                .distinct() //Para que no sean repetidos
+                .collectMultimap(Player::getClub);
 
+        System.out.println("Equipo");
+        listFilter.block().forEach((s, players) -> {
+            System.out.println(s);
+            players.forEach(player -> {
+                System.out.println(player.name + player.age);
+                assert player.club.equals("Juventus");
+            });
+        });
+        assert listFilter.block().size() == 1;
+    }
 
+    @Test
+    void reactive_filterNacionalityRankingWinners() {
+        List<Player> list = CsvUtilFile.getPlayers();
+        Flux<Player> listFlux = Flux.fromStream(list.parallelStream()).cache();
+        Mono<Map<String, Collection<Player>>> listFilter = listFlux
+                .buffer(100)
+                .flatMap(playerA -> listFlux
+                        .filter(playerB -> playerA.stream()
+                                .anyMatch(a -> a.national.equals(playerB.national)))
+                ).distinct()
+                .sort((k, player)-> player.winners)
+                .collectMultimap(Player::getNational);
+
+        assert listFilter.block().size() == 164;
+
+        System.out.println("Por Nacionalidad: ");
+        listFilter.block().forEach((k,players)->{
+            System.out.println("\nPais: " +k);
+            players.forEach(player -> {
+                System.out.println(player.name + " Overall Rating: "+player.winners);
+                assert Objects.equals(player.national, k);
+            });
+        });
+    }
 }
